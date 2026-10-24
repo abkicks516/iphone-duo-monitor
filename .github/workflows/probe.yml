@@ -1,0 +1,13 @@
+name: probe
+on: { push: { paths: [".github/workflows/probe.yml"] } }
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+          for u in https://www.apple.com/shop/buy-iphone https://www.apple.com/shop/buy-iphone/iphone-duo https://www.apple.com/iphone-duo/ "https://www.apple.com/shop/fulfillment-messages?pl=true&mts.0=regular&parts.0=MYW23LL/A&location=23060"; do
+            c=$(curl -s -A "$UA" -o p.html -w "%{http_code}" "$u"); echo "::warning::$c $(wc -c <p.html)b $u"
+          done
+          curl -s -A "$UA" https://www.apple.com/shop/buy-iphone -o b.html
+          echo "::warning::links: $(grep -oE '/shop/buy-iphone/[a-z0-9-]+' b.html | sort -u | tr '\n' ' ')"
