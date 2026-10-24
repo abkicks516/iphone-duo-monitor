@@ -39,7 +39,11 @@ def discover_parts():
     html = http_get(BUY_PAGE)
     parts = sorted(set(PART_RE.findall(html)))
     if not parts:
-        sys.exit(f"No part numbers found on {BUY_PAGE}. Set PARTS manually (see README).")
+        snippets = sorted(set(re.findall(r'.{40}M[A-Z0-9]{4}[A-Z]{2}/A.{40}', html)))[:3]
+        sys.exit(
+            f"No part numbers found on {BUY_PAGE} (page {len(html)} chars). "
+            f"Set PARTS manually (see README). Nearby text: {snippets}"
+        )
     print(f"Discovered {len(parts)} part numbers on the buy page")
     return parts
 
@@ -137,4 +141,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as e:
+        if e.code not in (None, 0):
+            print(f"::error::{e.code}")
+        raise
+    except Exception as e:
+        detail = getattr(e, "read", lambda: b"")()[:300]
+        print(f"::error::{type(e).__name__}: {e} {detail!r}")
+        raise
