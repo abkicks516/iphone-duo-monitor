@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: "*/5 * * * *" # GitHub may delay or skip runs under load
   workflow_dispatch:
+  push:
+    branches: [main]
 
 concurrency:
   group: monitor
@@ -25,11 +27,11 @@ jobs:
 
       - name: Check availability
         env:
-          ZIP_CODE: ${{ vars.ZIP_CODE }}
+          ZIP_CODE: ${{ vars.ZIP_CODE || '23060' }}
           INCLUDE_KEYWORDS: ${{ vars.INCLUDE_KEYWORDS }}
           EXCLUDE_KEYWORDS: ${{ vars.EXCLUDE_KEYWORDS }}
           PARTS: ${{ vars.PARTS }}
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'duo-watch-7f3k9q' }} # fine in a private repo
         run: python3 monitor.py
 
       - name: Save alert state
