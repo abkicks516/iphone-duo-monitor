@@ -21,7 +21,7 @@ To test notifications, run `curl -d "test" ntfy.sh/<your-topic>`.
 ## Run locally
 
 ```sh
-ZIP_CODE=94103 NTFY_TOPIC=duo-watch-7f3k9q INCLUDE_KEYWORDS=256GB python3 monitor.py
+ZIP_CODE=94103 NTFY_TOPIC=duo-watch-7f3k9qq INCLUDE_KEYWORDS=256GB python3 monitor.py
 ```
 
 ## Notes

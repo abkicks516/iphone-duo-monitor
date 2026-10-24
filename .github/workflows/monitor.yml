@@ -31,7 +31,7 @@ jobs:
           INCLUDE_KEYWORDS: ${{ vars.INCLUDE_KEYWORDS }}
           EXCLUDE_KEYWORDS: ${{ vars.EXCLUDE_KEYWORDS }}
           PARTS: ${{ vars.PARTS }}
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'duo-watch-7f3k9q' }} # fine in a private repo
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'duo-watch-7f3k9qq' }} # fine in a private repo
         run: python3 monitor.py
 
       - name: Save alert state
