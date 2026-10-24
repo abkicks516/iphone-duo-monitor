@@ -1,9 +1,0 @@
-name: test alert
-on: { push: { paths: [".github/workflows/test-alert.yml"] } }
-jobs:
-  ping:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          c=$(curl -s -o /dev/null -w "%{http_code}" -H "Title: iPhone Duo monitor is live" -H "Priority: urgent" -H "Tags: white_check_mark" -d "Test alert: you'll get a notification like this when an iPhone Duo is available for pickup near 23060." https://ntfy.sh/duo-watch-7f3k9qq)
-          echo "::warning::ntfy $c"
