@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 
 BUY_PAGE = os.environ.get("BUY_PAGE", "https://www.apple.com/shop/buy-iphone/iphone-duo")
-FULFILLMENT_URL = "https://www.apple.com/shop/fulfillment-messages"
+FULFILLMENT_URL = "https://www.apple.com/shop/retail/pickup-message"
 NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
 STATE_FILE = os.environ.get("STATE_FILE", "state.json")
 USER_AGENT = (
@@ -49,12 +49,13 @@ def discover_parts():
 
 
 def check_chunk(parts, location):
-    params = {"pl": "true", "mts.0": "regular", "location": location}
+    params = {"pl": "true", "location": location}
     for i, p in enumerate(parts):
         params[f"parts.{i}"] = p
     url = f"{FULFILLMENT_URL}?{urllib.parse.urlencode(params)}"
     data = json.loads(http_get(url, accept="application/json"))
-    stores = data.get("body", {}).get("content", {}).get("pickupMessage", {}).get("stores", [])
+    body = data.get("body", {})
+    stores = body.get("stores") or body.get("content", {}).get("pickupMessage", {}).get("stores", [])
     hits, titles = [], {}
     for store in stores:
         for part, info in (store.get("partsAvailability") or {}).items():

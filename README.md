@@ -26,6 +26,6 @@ ZIP_CODE=94103 NTFY_TOPIC=duo-watch-7f3k9q INCLUDE_KEYWORDS=256GB python3 monito
 
 ## Notes
 
-- This uses Apple's unofficial `fulfillment-messages` endpoint, which powers the "Check availability" button on apple.com. Apple can change it without notice.
+- This uses Apple's unofficial `retail/pickup-message` endpoint, which powers the "Check availability" button on apple.com. Apple can change it without notice.
 - GitHub can delay scheduled runs, and it disables them after 60 days without repo activity.
 - It only checks in-store pickup, which is usually where restocks appear first. It doesn't track online shipping dates.
