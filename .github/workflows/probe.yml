@@ -6,13 +6,7 @@ jobs:
     steps:
       - run: |
           UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
-          curl -s -A "$UA" -c jar https://www.apple.com/shop/buy-iphone/iphone-duo -o b.html
-          P=$(grep -oE 'M[A-Z0-9]{3,4}[A-Z]{1,2}/A' b.html | sort | uniq -c | sort -rn | head -8 | awk '{print $2}' | tr '\n' ' ')
-          echo "::warning::parts: $P"
-          echo "::warning::urls: $(grep -oE '[a-zA-Z/._-]*(fulfillment|availability|pickup|retail)[a-zA-Z/._-]*' b.html | sort | uniq -c | sort -rn | head -15 | awk '{print $2}' | tr '\n' ' ')"
-          echo "::warning::ctx: $(grep -oE '.{60}fulfillment.{120}' b.html | head -3 | tr -d '\n' | cut -c1-600)"
-          P1=$(echo $P | awk '{print $1}')
-          for q in "pl=true&mts.0=regular&parts.0=$P1&location=23060" "fae=true&pl=true&mts.0=regular&mts.1=compact&parts.0=$P1&searchNearby=true&location=23060" "little=false&parts.0=$P1&mts.0=regular&mts.1=sticky&fts=true&searchNearby=true&location=23060"; do
-            c=$(curl -s -A "$UA" -b jar -H "Referer: https://www.apple.com/shop/buy-iphone/iphone-duo" -o f.json -w "%{http_code}" "https://www.apple.com/shop/fulfillment-messages?$q"); echo "::warning::$c $(head -c 250 f.json | tr -d '\n') :: $q"
-          done
-          c=$(curl -s -A "$UA" -b jar -o f.json -w "%{http_code}" "https://www.apple.com/shop/retail/pickup-message?pl=true&parts.0=$P1&location=23060"); echo "::warning::pickup-message $c $(head -c 250 f.json | tr -d '\n')"
+          curl -s -A "$UA" "https://www.apple.com/shop/retail/pickup-message?pl=true&parts.0=MK1F4LL/A&parts.1=MK1Q4LL/A&location=23060" -o f.json
+          echo "::warning::keys: $(jq -c '.body|keys' f.json) nstores: $(jq '.body.stores|length' f.json)"
+          echo "::warning::store0: $(jq -c '.body.stores[0] | {storeName,city,storeNumber,partsAvailability}' f.json | cut -c1-1500)"
+          echo "::warning::all: $(jq -c '[.body.stores[] | {s:.storeName, p:[.partsAvailability[]|.pickupDisplay]}]' f.json | cut -c1-800)"
