@@ -5,13 +5,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-          curl -sL -A "$UA" https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display-1tb-night-sky -o b.html
-          w(){ echo "::warning::$1"; }
-          w "slugs: $(grep -oE 'iphone-duo/7\.6-inch-display-[a-z0-9.-]+' b.html | sort -u | head -12 | tr '\n' ' ')"
-          w "carriers: $(grep -oE '"(carrier|carrierModel|carrierProduct|cppProduct)":"[^"]+"' b.html | sort -u | head -12 | tr '\n' ' ')"
-          w "params: $(grep -oE '(purchaseOption|tradeIn[A-Za-z]*|appleCare[A-Za-z]*|ac[A-Z][A-Za-z]*|step|option\.[0-9]|fnode|atbtoken)[\"=:][^,&]{0,40}' b.html | sort | uniq -c | sort -rn | head -20 | awk '{$1="";print}' | tr '\n' '|')"
-          w "url-qs: $(grep -oE 'iphone-duo[^"<> ]*\?[^"<> ]{0,120}' b.html | sort -u | head -8 | tr '\n' ' ')"
-          for u in "https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display-1tb-night-sky-unlocked" "https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display-1tb-night-sky-att" "https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display-1tb-night-sky-verizon"; do
-            w "$(curl -s -A "$UA" -o /dev/null -w "%{http_code} -> %{redirect_url}" "$u") :: $u"
-          done
+          curl -s "https://ntfy.sh/duo-watch-7f3k9qq/json?poll=1&since=all" -o h.json
+          echo "::warning::count $(wc -l < h.json)"
+          TZ=America/New_York jq -r '"\(.time|strflocaltime("%a %I:%M:%S %p")) | \(.title // "-") | \((.message // "")|gsub("\n";" / ")|.[0:140])"' h.json | while read -r l; do echo "::warning::$l"; done
