@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 
@@ -104,15 +105,7 @@ def save_state(keys):
         json.dump(sorted(keys), f, indent=2)
 
 
-def main():
-    location = os.environ.get("ZIP_CODE")
-    topic = os.environ.get("NTFY_TOPIC")
-    if not location or not topic:
-        sys.exit("ZIP_CODE and NTFY_TOPIC must be set")
-    include = env_list("INCLUDE_KEYWORDS")  # e.g. "256GB,Black" - all must match
-    exclude = env_list("EXCLUDE_KEYWORDS")  # e.g. "AT&T,Verizon"
-    parts = env_list("PARTS") or discover_parts()
-
+def check_once(parts, location, include, exclude, topic, previous, verbose):
     hits, titles = [], {}
     for i in range(0, len(parts), CHUNK):
         h, t = check_chunk(parts[i : i + CHUNK], location)
@@ -120,25 +113,58 @@ def main():
         titles.update(t)
 
     watched = [p for p in parts if matches_filters(titles.get(p, p), include, exclude)]
-    print(f"Watching {len(watched)} of {len(parts)} models near {location}:")
-    for p in watched:
-        print(f"  {p}  {titles.get(p, '(no title returned)')}")
-    if titles and not watched:
-        print("WARNING: your keyword filters match nothing. Titles seen above / check spelling.")
+    if verbose:
+        print(f"Watching {len(watched)} of {len(parts)} models near {location}:")
+        for p in watched:
+            print(f"  {p}  {titles.get(p, '(no title returned)')}")
+        if titles and not watched:
+            print("WARNING: your keyword filters match nothing. Titles seen above / check spelling.")
 
     hits = [h for h in hits if h["part"] in watched]
     current = {f"{h['part']}@{h['store']}" for h in hits}
-    previous = load_state()
     new = [h for h in hits if f"{h['part']}@{h['store']}" not in previous]
 
+    stamp = time.strftime("%H:%M:%S")
     if new:
         lines = [f"{h['title']} - {h['store']} ({h['city']}) {h['quote']}".strip() for h in new]
-        print("IN STOCK:\n  " + "\n  ".join(lines))
+        print(f"{stamp} IN STOCK:\n  " + "\n  ".join(lines))
         notify(topic, f"iPhone Duo in stock at {len(new)} spot(s)!", "\n".join(lines), BUY_PAGE)
     else:
-        print(f"No new availability ({len(hits)} already-alerted listing(s) still in stock)")
+        print(f"{stamp} No new availability ({len(hits)} already-alerted listing(s) still in stock)")
+    return current  # sold-out listings drop out, so a restock re-alerts
 
-    save_state(current)  # forget sold-out listings so a restock re-alerts
+
+def main():
+    location = os.environ.get("ZIP_CODE")
+    topic = os.environ.get("NTFY_TOPIC")
+    if not location or not topic:
+        sys.exit("ZIP_CODE and NTFY_TOPIC must be set")
+    include = env_list("INCLUDE_KEYWORDS")  # e.g. "256GB,Black" - all must match
+    exclude = env_list("EXCLUDE_KEYWORDS")  # e.g. "AT&T,Verizon"
+    # Keep checking for RUN_MINUTES (0 = check once), every INTERVAL_SECONDS.
+    deadline = time.time() + 60 * float(os.environ.get("RUN_MINUTES", "0"))
+    interval = float(os.environ.get("INTERVAL_SECONDS", "120"))
+    parts = env_list("PARTS") or discover_parts()
+
+    state, checks, failures, first = load_state(), 0, 0, True
+    while True:
+        checks += 1
+        try:
+            state = check_once(parts, location, include, exclude, topic, state, first)
+            save_state(state)
+            first = False
+        except Exception as e:  # one bad response shouldn't end a long run
+            failures += 1
+            print(f"{time.strftime('%H:%M:%S')} check failed: {type(e).__name__}: {e}")
+            if failures <= 3:
+                print(f"::warning::check failed: {type(e).__name__}: {e}")
+        if time.time() + interval >= deadline:
+            break
+        time.sleep(interval)
+
+    print(f"Done: {checks} checks, {failures} failed")
+    if failures == checks:
+        sys.exit(f"All {checks} checks failed")
 
 
 if __name__ == "__main__":

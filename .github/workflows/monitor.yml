@@ -1,11 +1,11 @@
 name: iPhone Duo stock monitor
 
 on:
+  # Each run checks every 2 minutes for ~5h40m. The 30-minute schedule just makes
+  # sure a new run is always queued, so there's no gap when one finishes.
   schedule:
-    - cron: "*/5 * * * *" # GitHub may delay or skip runs under load
+    - cron: "*/30 * * * *"
   workflow_dispatch:
-  push:
-    branches: [main]
 
 concurrency:
   group: monitor
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
 
@@ -31,8 +31,10 @@ jobs:
           INCLUDE_KEYWORDS: ${{ vars.INCLUDE_KEYWORDS }}
           EXCLUDE_KEYWORDS: ${{ vars.EXCLUDE_KEYWORDS }}
           PARTS: ${{ vars.PARTS }}
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'duo-watch-7f3k9qq' }} # fine in a private repo
-        run: python3 monitor.py
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RUN_MINUTES: "340"
+          INTERVAL_SECONDS: "120"
+        run: python3 -u monitor.py
 
       - name: Save alert state
         if: always()
