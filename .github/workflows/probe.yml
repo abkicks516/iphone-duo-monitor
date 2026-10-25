@@ -1,18 +1,17 @@
 name: probe
 on: { push: { branches: [probe-link] } }
 jobs:
-  sample:
+  probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - run: |
-          python3 - <<'PY'
-          import monitor as m
-          m.PRICES["MK1J4LL/A"] = 2599
-          hit = {"part": "MK1J4LL/A", "title": "iPhone Duo 1TB Night Sky", "store": "Tysons Corner", "city": "McLean",
-                 "state": "VA", "quote": "Available Today", "phone": "703-3368450",
-                 "street": "7926 Tysons Corner Center", "zip": "22102", "hours": "11:00 AM-7:00 PM"}
-          title, msg, url, actions = m.alert_for(hit)
-          m.notify("duo-watch-7f3k9qq", "SAMPLE - " + title, "SAMPLE ONLY, not real stock.\n" + msg, url, actions)
-          print("::warning::sent")
-          PY
+          UA="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+          curl -sL -A "$UA" https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display-1tb-night-sky -o b.html
+          w(){ echo "::warning::$1"; }
+          w "slugs: $(grep -oE 'iphone-duo/7\.6-inch-display-[a-z0-9.-]+' b.html | sort -u | head -12 | tr '\n' ' ')"
+          w "carriers: $(grep -oE '"(carrier|carrierModel|carrierProduct|cppProduct)":"[^"]+"' b.html | sort -u | head -12 | tr '\n' ' ')"
+          w "params: $(grep -oE '(purchaseOption|tradeIn[A-Za-z]*|appleCare[A-Za-z]*|ac[A-Z][A-Za-z]*|step|option\.[0-9]|fnode|atbtoken)[\"=:][^,&]{0,40}' b.html | sort | uniq -c | sort -rn | head -20 | awk '{$1="";print}' | tr '\n' '|')"
+          w "url-qs: $(grep -oE 'iphone-duo[^"<> ]*\?[^"<> ]{0,120}' b.html | sort -u | head -8 | tr '\n' ' ')"
+          for u in "https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display-1tb-night-sky-unlocked" "https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display-1tb-night-sky-att" "https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display-1tb-night-sky-verizon"; do
+            w "$(curl -s -A "$UA" -o /dev/null -w "%{http_code} -> %{redirect_url}" "$u") :: $u"
+          done
