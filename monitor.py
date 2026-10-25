@@ -12,6 +12,8 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 BUY_PAGE = os.environ.get("BUY_PAGE", "https://www.apple.com/shop/buy-iphone/iphone-duo")
 FULFILLMENT_URL = "https://www.apple.com/shop/retail/pickup-message"
@@ -23,7 +25,10 @@ USER_AGENT = (
 )
 # Apple part numbers look like "MXYZ3LL/A"; LL = US. Other regions use other codes.
 PART_RE = re.compile(r'"(M[A-Z0-9]{3,4}\d?[A-Z]{1,2}/A)"')
+PRICE_RE = re.compile(r'"partNumber":"(M[A-Z0-9/]+)","price":\{"fullPrice":([\d.]+)')
 CHUNK = 10  # parts per fulfillment request
+TZ = ZoneInfo(os.environ.get("TIMEZONE", "America/New_York"))
+PRICES = {}  # part -> price, filled in from the buy page
 
 
 def env_list(name):
@@ -39,6 +44,7 @@ def http_get(url, accept="text/html"):
 def discover_parts():
     html = http_get(BUY_PAGE)
     parts = sorted(set(PART_RE.findall(html)))
+    PRICES.update((p, float(v)) for p, v in PRICE_RE.findall(html))
     if not parts:
         snippets = sorted(set(re.findall(r'.{40}M[A-Z0-9]{4}[A-Z]{2}/A.{40}', html)))[:3]
         sys.exit(
@@ -66,13 +72,22 @@ def check_chunk(parts, location):
             )
             titles[part] = title
             if info.get("pickupDisplay") == "available":
+                addr = store.get("address") or {}
+                hours = store.get("storeHours") or {}
                 hits.append(
                     {
                         "part": part,
                         "title": title,
                         "store": store.get("storeName", "?"),
                         "city": store.get("city", ""),
+                        "state": store.get("state", ""),
                         "quote": info.get("pickupSearchQuote", ""),
+                        "phone": store.get("phoneNumber", ""),
+                        "street": addr.get("address2") or "",
+                        "zip": addr.get("postalCode") or "",
+                        "hours": (hours.get("hours") or [{}])[0].get("storeTimings", "")
+                        if isinstance(hours.get("hours"), list)
+                        else hours.get("storeTimings", ""),
                     }
                 )
     return hits, titles
@@ -83,11 +98,41 @@ def matches_filters(title, include, exclude):
     return all(k.lower() in t for k in include) and not any(k.lower() in t for k in exclude)
 
 
-def notify(topic, title, message, click):
+def product_url(part):
+    # Apple redirects this to the buy page with storage and color preselected.
+    return f"https://www.apple.com/shop/product/{part}"
+
+
+def alert_for(hit):
+    """Build (title, message, click_url, actions) for one in-stock listing."""
+    model = hit["title"].replace("iPhone Duo ", "")
+    title = f"{model} at {hit['store']}"
+    found = datetime.now(TZ).strftime("%-I:%M %p")
+    price = PRICES.get(hit["part"])
+    where = ", ".join(x for x in (hit["street"], hit["city"]) if x)
+    lines = [
+        f"{hit['title']}" + (f" - ${price:,.0f}" if price else ""),
+        f"Pickup: {hit['quote']}" if hit["quote"] else "",
+        f"Apple {hit['store']}: {where}" if where else f"Apple {hit['store']}",
+        f"Store hours today: {hit['hours']}" if hit["hours"] else "",
+        f"Found {found}. Tap to buy - these sell out in minutes.",
+    ]
+    url = product_url(hit["part"])
+    maps_q = urllib.parse.quote(f"Apple {hit['store']} {hit['street']} {hit['zip']}".strip())
+    actions = [f"view, Buy now, {url}", f"view, Directions, https://maps.apple.com/?q={maps_q}"]
+    if hit["phone"]:
+        actions.insert(1, f"view, Call store, tel:{re.sub(r'[^0-9+]', '', hit['phone'])}")
+    return title, "\n".join(l for l in lines if l), url, "; ".join(actions)
+
+
+def notify(topic, title, message, click, actions=None):
+    headers = {"Title": title, "Priority": "urgent", "Tags": "iphone,rotating_light", "Click": click}
+    if actions:
+        headers["Actions"] = actions
     req = urllib.request.Request(
         f"{NTFY_SERVER}/{topic}",
         data=message.encode("utf-8"),
-        headers={"Title": title, "Priority": "urgent", "Tags": "iphone,rotating_light", "Click": click},
+        headers={k: v.encode("ascii", "replace").decode() for k, v in headers.items()},
     )
     urllib.request.urlopen(req, timeout=30).read()
 
@@ -124,11 +169,12 @@ def check_once(parts, location, include, exclude, topic, previous, verbose):
     current = {f"{h['part']}@{h['store']}" for h in hits}
     new = [h for h in hits if f"{h['part']}@{h['store']}" not in previous]
 
-    stamp = time.strftime("%H:%M:%S")
+    stamp = datetime.now(TZ).strftime("%H:%M:%S")
     if new:
-        lines = [f"{h['title']} - {h['store']} ({h['city']}) {h['quote']}".strip() for h in new]
-        print(f"{stamp} IN STOCK:\n  " + "\n  ".join(lines))
-        notify(topic, f"iPhone Duo in stock at {len(new)} spot(s)!", "\n".join(lines), BUY_PAGE)
+        for h in new:  # one alert per listing, so each links to its own model
+            title, message, url, actions = alert_for(h)
+            print(f"{stamp} IN STOCK: {title} ({h['part']}) {h['quote']}")
+            notify(topic, title, message, url, actions)
     else:
         print(f"{stamp} No new availability ({len(hits)} already-alerted listing(s) still in stock)")
     return current  # sold-out listings drop out, so a restock re-alerts
