@@ -29,6 +29,8 @@ PRICE_RE = re.compile(r'"partNumber":"(M[A-Z0-9/]+)","price":\{"fullPrice":([\d.
 CHUNK = 10  # parts per fulfillment request
 TZ = ZoneInfo(os.environ.get("TIMEZONE", "America/New_York"))
 PRICES = {}  # part -> price, filled in from the buy page
+CARRIER = os.environ.get("CARRIER", "unlocked")  # unlocked, att, verizon or t-mobile
+BAG_URL = "https://www.apple.com/shop/bag"
 
 
 def env_list(name):
@@ -98,8 +100,13 @@ def matches_filters(title, include, exclude):
     return all(k.lower() in t for k in include) and not any(k.lower() in t for k in exclude)
 
 
-def product_url(part):
-    # Apple redirects this to the buy page with storage and color preselected.
+def product_url(part, title):
+    """Buy page with storage, color and carrier preselected."""
+    m = re.fullmatch(r"iPhone Duo (\d+[GT]B) (.+)", title)
+    if m:
+        storage, color = m.group(1).lower(), re.sub(r"\W+", "-", m.group(2).lower()).strip("-")
+        return f"{BUY_PAGE}/7.6-inch-display-{storage}-{color}-{CARRIER}"
+    # Unknown title format: Apple redirects this to the buy page with storage and color set.
     return f"https://www.apple.com/shop/product/{part}"
 
 
@@ -117,11 +124,11 @@ def alert_for(hit):
         f"Store hours today: {hit['hours']}" if hit["hours"] else "",
         f"Found {found}. Tap to buy - these sell out in minutes.",
     ]
-    url = product_url(hit["part"])
-    maps_q = urllib.parse.quote(f"Apple {hit['store']} {hit['street']} {hit['zip']}".strip())
-    actions = [f"view, Buy now, {url}", f"view, Directions, https://maps.apple.com/?q={maps_q}"]
+    url = product_url(hit["part"], hit["title"])
+    # ntfy allows at most 3 buttons. "Open bag" is for a phone already waiting in your bag.
+    actions = [f"view, Buy now, {url}", f"view, Open bag, {BAG_URL}"]
     if hit["phone"]:
-        actions.insert(1, f"view, Call store, tel:{re.sub(r'[^0-9+]', '', hit['phone'])}")
+        actions.append(f"view, Call store, tel:{re.sub(r'[^0-9+]', '', hit['phone'])}")
     return title, "\n".join(l for l in lines if l), url, "; ".join(actions)
 
 
