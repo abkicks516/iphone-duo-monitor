@@ -1,0 +1,18 @@
+name: probe
+on: { push: { branches: [probe-link] } }
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+          curl -s -A "$UA" https://www.apple.com/shop/buy-iphone/iphone-duo -o b.html
+          P=$(grep -oE 'M[A-Z0-9]{3,4}[A-Z]{1,2}/A' b.html | sort -u); q=""; i=0; for p in $P; do q="$q&parts.$i=$p"; i=$((i+1)); done
+          curl -s -A "$UA" "https://www.apple.com/shop/retail/pickup-message?pl=true&location=23060$q" -o f.json
+          echo "::warning::NOW: $(jq -c '[.body.stores[] as $s | $s.partsAvailability[] | select(.pickupDisplay=="available") | "\($s.storeName) \(.partNumber) \(.messageTypes.regular.storePickupProductTitle) \(.pickupSearchQuote)"]' f.json)"
+          echo "::warning::store: $(jq -c '.body.stores[] | select(.storeName=="Tysons Corner") | {storeNumber,phoneNumber,address,reservationUrl,storeHours:(.storeHours.hours[0]? // .storeHours)}' f.json | cut -c1-700)"
+          echo "::warning::slugs: $(grep -oE '/shop/buy-iphone/iphone-duo/[a-z0-9-]+' b.html | sort -u | head -12 | tr '\n' ' ')"
+          echo "::warning::ctx: $(grep -oE '.{0,200}MK1H4LL/A.{0,300}' b.html | head -2 | tr -d '\n' | cut -c1-900)"
+          for u in "https://www.apple.com/shop/product/MK1H4LL/A" "https://www.apple.com/shop/buy-iphone/iphone-duo/1tb-night-sky"; do
+            echo "::warning::$(curl -s -A "$UA" -o /dev/null -w "%{http_code} -> %{redirect_url}" "$u") :: $u"
+          done
