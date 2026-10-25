@@ -1,7 +1,7 @@
 name: iPhone Duo stock monitor
 
 on:
-  # Each run checks every 2 minutes for ~5h40m. The 30-minute schedule just makes
+  # Each run checks every 60 seconds for ~5h40m. The 30-minute schedule just makes
   # sure a new run is always queued, so there's no gap when one finishes.
   schedule:
     - cron: "*/30 * * * *"
@@ -10,6 +10,9 @@ on:
 concurrency:
   group: monitor
   cancel-in-progress: false
+
+permissions:
+  contents: write # to commit stock-history.csv
 
 jobs:
   check:
@@ -33,7 +36,7 @@ jobs:
           PARTS: ${{ vars.PARTS }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'duo-watch-7f3k9qq' }}
           RUN_MINUTES: "340"
-          INTERVAL_SECONDS: "120"
+          INTERVAL_SECONDS: "60"
         run: python3 -u monitor.py
 
       - name: Save alert state

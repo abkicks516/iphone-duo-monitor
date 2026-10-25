@@ -8,6 +8,7 @@ Python standard library so it runs anywhere without installing anything.
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -31,6 +32,7 @@ TZ = ZoneInfo(os.environ.get("TIMEZONE", "America/New_York"))
 PRICES = {}  # part -> price, filled in from the buy page
 CARRIER = os.environ.get("CARRIER", "unlocked")  # unlocked, att, verizon or t-mobile
 BAG_URL = "https://www.apple.com/shop/bag"
+HISTORY_FILE = os.environ.get("HISTORY_FILE", "stock-history.csv")
 
 
 def env_list(name):
@@ -144,6 +146,31 @@ def notify(topic, title, message, click, actions=None):
     urllib.request.urlopen(req, timeout=30).read()
 
 
+def log_history(appeared, gone, titles):
+    """Append in-stock/sold-out events to the CSV, then push it if running in Actions."""
+    now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
+    new_file = not os.path.exists(HISTORY_FILE)
+    with open(HISTORY_FILE, "a") as f:
+        if new_file:
+            f.write("time,event,model,store,part\n")
+        for event, keys in (("in stock", appeared), ("sold out", gone)):
+            for key in sorted(keys):
+                part, store = key.split("@", 1)
+                f.write(f"{now},{event},{titles.get(part, part)},{store},{part}\n")
+    if os.environ.get("GITHUB_ACTIONS"):
+        git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True)
+        git("config", "user.name", "stock-monitor")
+        git("config", "user.email", "stock-monitor@users.noreply.github.com")
+        git("add", HISTORY_FILE)
+        git("commit", "-qm", f"Stock history: {len(appeared)} in, {len(gone)} out")
+        for _ in range(3):
+            git("pull", "-q", "--rebase", "origin", "main")
+            if git("push", "-q", "origin", "HEAD:main").returncode == 0:
+                break
+        else:
+            print("WARNING: could not push stock history")
+
+
 def load_state():
     try:
         with open(STATE_FILE) as f:
@@ -175,6 +202,11 @@ def check_once(parts, location, include, exclude, topic, previous, verbose):
     hits = [h for h in hits if h["part"] in watched]
     current = {f"{h['part']}@{h['store']}" for h in hits}
     new = [h for h in hits if f"{h['part']}@{h['store']}" not in previous]
+    if current != previous:
+        try:
+            log_history(current - previous, previous - current, titles)
+        except Exception as e:  # never let logging block an alert
+            print(f"WARNING: history logging failed: {e}")
 
     stamp = datetime.now(TZ).strftime("%H:%M:%S")
     if new:
