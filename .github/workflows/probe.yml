@@ -5,10 +5,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
-          for z in 10001 07078; do
-            curl -s -A "$UA" "https://www.apple.com/shop/retail/pickup-message?pl=true&location=$z&parts.0=MK1F4LL/A" -o f.json
-            echo "::warning::$z: $(jq -r '[.body.stores[] | "\(.storeName) (\(.state // .city))"] | join(", ")' f.json)"
-          done
-          c=$(curl -s -o /dev/null -w "%{http_code}" -H "Title: iPhone Duo alerts are set up" -H "Tags: white_check_mark" -d "You'll get an alert here when any iPhone Duo is available for in-store pickup at Apple Stores around Manhattan and North NJ. Tap the alert to open the buy page (Unlocked). Checks run every 60 seconds." https://ntfy.sh/duo-watch-ny-qci1o0ym)
-          echo "::warning::welcome $c"
+          cat > p.py <<'PY'
+          import json, urllib.request, time
+          UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+          zips = "10001 10282 11201 11256 11101 11375 11691 10451 10475 10301 10314 07302 07030 07086 07087 07093 07047 07002 07094 07102 07114 07017 07050 07052 07003 07042 07201 07036 07065 07024 07631 07601 07666 07020 07652 07055 07501 07095 08817 08901".split()
+          cov = {}
+          for z in zips:
+              u = f"https://www.apple.com/shop/retail/pickup-message?pl=true&location={z}&parts.0=MK1F4LL/A"
+              d = json.load(urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": UA}), timeout=30))
+              cov[z] = {f"{s['storeName']} ({s.get('state') or s.get('city','')})" for s in d["body"]["stores"]}
+              time.sleep(1)
+          union = set().union(*cov.values())
+          print(f"::warning::{len(union)} stores total: " + "; ".join(sorted(union)))
+          left, pick = set(union), []
+          while left:
+              z = max(cov, key=lambda k: len(cov[k] & left))
+              pick.append(z); left -= cov[z]
+          print(f"::warning::minimal ZIPs: {','.join(pick)}")
+          cur = cov["10001"] | cov["07078"] if "07078" in cov else cov["10001"]
+          print(f"::warning::per-zip counts: " + " ".join(f"{z}:{len(c)}" for z, c in cov.items()))
+          PY
+          python3 p.py
