@@ -5,33 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          cat > p.py <<'PY'
-          import json, re, urllib.request, urllib.parse, time
-          UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
-          get = lambda u: urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": UA}), timeout=30).read().decode()
-          parts = sorted(set(re.findall(r'"(M[A-Z0-9]{3,4}\d?[A-Z]{1,2}/A)"', get("https://www.apple.com/shop/buy-iphone/iphone-duo"))))
-          q = "&".join(f"parts.{i}={urllib.parse.quote(p)}" for i, p in enumerate(parts))
-          current = set()
-          for z in "10001,08901,10475,07652,11256".split(","):
-              d = json.loads(get(f"https://www.apple.com/shop/retail/pickup-message?pl=true&location={z}&{q}"))
-              current |= {s["storeName"] for s in d["body"]["stores"]}
-          stores, cov = {}, {}
-          for z in "11001 11030 11501 11550 11590 11709 11753 11797 11801 11701 11706 11727 11738 11746 11768 11772 11784 11901 11937 11968".split():
-              d = json.loads(get(f"https://www.apple.com/shop/retail/pickup-message?pl=true&location={z}&{q}"))
-              cov[z] = set()
-              for s in d["body"]["stores"]:
-                  cov[z].add(s["storeName"])
-                  avail = [i["messageTypes"]["regular"]["storePickupProductTitle"] for i in s["partsAvailability"].values() if i.get("pickupDisplay") == "available"]
-                  stores[s["storeName"]] = (s.get("city", ""), avail)
-              time.sleep(1)
-          new = set(stores) - current
-          print(f"::warning::{len(stores)} stores reached; NOT yet covered: {sorted(new)}")
-          instock = {k: v for k, v in stores.items() if v[1]}
-          print(f"::warning::IN STOCK NOW: {instock if instock else 'none'}")
-          print(f"::warning::all reached: " + "; ".join(f"{k} ({v[0]})" for k, v in sorted(stores.items())))
-          left, pick = set(new), []
-          while left:
-              z = max(cov, key=lambda k: len(cov[k] & left)); pick.append(z); left -= cov[z]
-          print(f"::warning::ZIPs to add: {pick}")
-          PY
-          python3 p.py
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+          for z in 11746 11727 11779; do
+            curl -s -A "$UA" "https://www.apple.com/shop/retail/pickup-message?pl=true&location=$z&parts.0=MK1F4LL/A" -o f.json
+            echo "::warning::$z: $(jq -r '[.body.stores[].storeName] | join(", ")' f.json)"
+          done
