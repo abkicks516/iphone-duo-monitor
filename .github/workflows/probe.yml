@@ -5,11 +5,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          UA="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-          B=https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display
-          for s in 256gb-night-sky-verizon-apple-upgrade 512gb-star-white-verizon-apple-upgrade 256gb-night-sky-verizon 256gb-night-sky-bogus-carrier; do
-            echo "::warning::$(curl -s -A "$UA" -o p.html -w "%{http_code} -> %{redirect_url}" "$B-$s") $(wc -c < p.html)b :: $s"
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+          for z in 10001 07078; do
+            curl -s -A "$UA" "https://www.apple.com/shop/retail/pickup-message?pl=true&location=$z&parts.0=MK1F4LL/A" -o f.json
+            echo "::warning::$z: $(jq -r '[.body.stores[] | "\(.storeName) (\(.state // .city))"] | join(", ")' f.json)"
           done
-          curl -sL -A "$UA" "$B-256gb-night-sky-verizon" -o v.html
-          echo "::warning::carrier slugs: $(grep -oE '7\.6-inch-display-256gb-night-sky-[a-z-]+' v.html | sort -u | tr '\n' ' ')"
-          echo "::warning::upgrade mentions: $(grep -oiE '.{0,60}apple-upgrade.{0,60}' v.html | head -3 | tr '\n' ' ' | cut -c1-500)"
+          c=$(curl -s -o /dev/null -w "%{http_code}" -H "Title: iPhone Duo alerts are set up" -H "Tags: white_check_mark" -d "You'll get an alert here when any iPhone Duo is available for in-store pickup at Apple Stores around Manhattan and North NJ. Tap the alert to open the buy page (Unlocked). Checks run every 60 seconds." https://ntfy.sh/duo-watch-ny-qci1o0ym)
+          echo "::warning::welcome $c"
