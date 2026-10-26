@@ -184,16 +184,20 @@ def save_state(keys):
         json.dump(sorted(keys), f, indent=2)
 
 
-def check_once(parts, location, include, exclude, topic, previous, verbose):
-    hits, titles = [], {}
-    for i in range(0, len(parts), CHUNK):
-        h, t = check_chunk(parts[i : i + CHUNK], location)
-        hits += h
-        titles.update(t)
+def check_once(parts, locations, include, exclude, topic, previous, verbose):
+    hits, titles, seen = [], {}, set()
+    for location in locations:  # nearby ZIPs share stores, so skip repeats
+        for i in range(0, len(parts), CHUNK):
+            h, t = check_chunk(parts[i : i + CHUNK], location)
+            titles.update(t)
+            for hit in h:
+                if (hit["part"], hit["store"]) not in seen:
+                    seen.add((hit["part"], hit["store"]))
+                    hits.append(hit)
 
     watched = [p for p in parts if matches_filters(titles.get(p, p), include, exclude)]
     if verbose:
-        print(f"Watching {len(watched)} of {len(parts)} models near {location}:")
+        print(f"Watching {len(watched)} of {len(parts)} models near {', '.join(locations)}:")
         for p in watched:
             print(f"  {p}  {titles.get(p, '(no title returned)')}")
         if titles and not watched:
@@ -220,9 +224,9 @@ def check_once(parts, location, include, exclude, topic, previous, verbose):
 
 
 def main():
-    location = os.environ.get("ZIP_CODE")
+    locations = env_list("ZIP_CODE")  # one or more, comma-separated
     topic = os.environ.get("NTFY_TOPIC")
-    if not location or not topic:
+    if not locations or not topic:
         sys.exit("ZIP_CODE and NTFY_TOPIC must be set")
     include = env_list("INCLUDE_KEYWORDS")  # e.g. "256GB,Black" - all must match
     exclude = env_list("EXCLUDE_KEYWORDS")  # e.g. "AT&T,Verizon"
@@ -235,7 +239,7 @@ def main():
     while True:
         checks += 1
         try:
-            state = check_once(parts, location, include, exclude, topic, state, first)
+            state = check_once(parts, locations, include, exclude, topic, state, first)
             save_state(state)
             first = False
         except Exception as e:  # one bad response shouldn't end a long run
