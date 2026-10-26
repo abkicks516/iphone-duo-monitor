@@ -30,7 +30,7 @@ jobs:
             carrier: verizon-apple-upgrade
             history: stock-history.csv
           - name: nyc-nj
-            zip: "10001,07078"
+            zip: "10001,08901,10475,07652,11256" # covers all 27 stores near their ZIP list
             topic: duo-watch-ny-qci1o0ym
             exclude: ""
             carrier: unlocked
