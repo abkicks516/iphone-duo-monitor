@@ -30,9 +30,11 @@ jobs:
             carrier: unlocked
             history: stock-history-dc-nova.csv
           - name: nyc-nj
-            zip: "10001,08901,10475,07652,11256" # covers all 27 stores near their ZIP list
+            zip: "10001,08901,10475,07652,11256,11746" # 29 NYC, NJ and Long Island stores
             topic: duo-watch-ny-qci1o0ym
             exclude: ""
+            # Suffolk ZIPs also reach Connecticut and Rhode Island stores; skip those.
+            exclude_stores: Danbury Fair Mall,Evergreen Walk,Greenwich Avenue,New Haven,Providence Place,SoNo Collection,Westfarms
             carrier: unlocked
             history: stock-history-nyc-nj.csv
     name: check (${{ matrix.name }})
@@ -53,6 +55,7 @@ jobs:
           NTFY_TOPIC: ${{ matrix.topic }}
           EXCLUDE_KEYWORDS: ${{ matrix.exclude }}
           CARRIER: ${{ matrix.carrier }}
+          EXCLUDE_STORES: ${{ matrix.exclude_stores }}
           HISTORY_FILE: ${{ matrix.history }}
           RUN_MINUTES: "340"
           INTERVAL_SECONDS: "60"

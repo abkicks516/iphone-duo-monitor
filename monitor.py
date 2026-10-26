@@ -184,13 +184,15 @@ def save_state(keys):
         json.dump(sorted(keys), f, indent=2)
 
 
-def check_once(parts, locations, include, exclude, topic, previous, verbose):
+def check_once(parts, locations, include, exclude, topic, previous, verbose, skip_stores=()):
     hits, titles, seen = [], {}, set()
     for location in locations:  # nearby ZIPs share stores, so skip repeats
         for i in range(0, len(parts), CHUNK):
             h, t = check_chunk(parts[i : i + CHUNK], location)
             titles.update(t)
             for hit in h:
+                if hit["store"].lower() in skip_stores:
+                    continue
                 if (hit["part"], hit["store"]) not in seen:
                     seen.add((hit["part"], hit["store"]))
                     hits.append(hit)
@@ -228,6 +230,7 @@ def main():
     topic = os.environ.get("NTFY_TOPIC")
     if not locations or not topic:
         sys.exit("ZIP_CODE and NTFY_TOPIC must be set")
+    skip_stores = {x.lower() for x in env_list("EXCLUDE_STORES")}  # e.g. "New Haven,Westfarms"
     include = env_list("INCLUDE_KEYWORDS")  # e.g. "256GB,Black" - all must match
     exclude = env_list("EXCLUDE_KEYWORDS")  # e.g. "AT&T,Verizon"
     # Keep checking for RUN_MINUTES (0 = check once), every INTERVAL_SECONDS.
@@ -239,7 +242,7 @@ def main():
     while True:
         checks += 1
         try:
-            state = check_once(parts, locations, include, exclude, topic, state, first)
+            state = check_once(parts, locations, include, exclude, topic, state, first, skip_stores)
             save_state(state)
             first = False
         except Exception as e:  # one bad response shouldn't end a long run
