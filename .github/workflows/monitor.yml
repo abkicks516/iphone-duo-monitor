@@ -32,7 +32,8 @@ jobs:
         env:
           ZIP_CODE: ${{ vars.ZIP_CODE || '23060' }}
           INCLUDE_KEYWORDS: ${{ vars.INCLUDE_KEYWORDS }}
-          EXCLUDE_KEYWORDS: ${{ vars.EXCLUDE_KEYWORDS }}
+          EXCLUDE_KEYWORDS: ${{ vars.EXCLUDE_KEYWORDS || '1TB,2TB' }}
+          CARRIER: ${{ vars.CARRIER || 'verizon-apple-upgrade' }}
           PARTS: ${{ vars.PARTS }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'duo-watch-7f3k9qq' }}
           RUN_MINUTES: "340"
