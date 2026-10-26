@@ -23,12 +23,12 @@ jobs:
       matrix:
         # One entry per person. Each gets its own alerts, settings and history file.
         include:
-          - name: richmond
-            zip: "23060"
+          - name: dc-nova
+            zip: "22102" # Tysons: covers all 12 DC-area stores (NoVA, DC, nearby MD)
             topic: duo-watch-7f3k9qq
-            exclude: 1TB,2TB
-            carrier: verizon-apple-upgrade
-            history: stock-history.csv
+            exclude: ""
+            carrier: unlocked
+            history: stock-history-dc-nova.csv
           - name: nyc-nj
             zip: "10001,08901,10475,07652,11256" # covers all 27 stores near their ZIP list
             topic: duo-watch-ny-qci1o0ym
