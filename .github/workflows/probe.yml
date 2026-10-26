@@ -5,10 +5,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          curl -s "https://ntfy.sh/duo-watch-7f3k9qq/json?poll=1&since=all" -o h.json
-          TZ=America/New_York jq -r 'select(.time > 1792940400) | "\(.time|strflocaltime("%I:%M:%S %p")) | \(.title // "-")"' h.json | while read -r l; do echo "::warning::alert $l"; done
-          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
-          curl -s -A "$UA" https://www.apple.com/shop/buy-iphone/iphone-duo -o b.html
-          P=$(grep -oE 'M[A-Z0-9]{3,4}[A-Z]{1,2}/A' b.html | sort -u); q=""; i=0; for p in $P; do q="$q&parts.$i=$p"; i=$((i+1)); done
-          c=$(curl -s -A "$UA" -w "%{http_code}" "https://www.apple.com/shop/retail/pickup-message?pl=true&location=23060$q" -o f.json)
-          echo "::warning::apple now: http $c, $(jq -c '[.body.stores[] as $s | $s.partsAvailability[] | select(.pickupDisplay=="available") | "\($s.storeName): \(.messageTypes.regular.storePickupProductTitle)"]' f.json)"
+          UA="Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+          B=https://www.apple.com/shop/buy-iphone/iphone-duo/7.6-inch-display
+          for s in 256gb-night-sky-verizon-apple-upgrade 512gb-star-white-verizon-apple-upgrade 256gb-night-sky-verizon 256gb-night-sky-bogus-carrier; do
+            echo "::warning::$(curl -s -A "$UA" -o p.html -w "%{http_code} -> %{redirect_url}" "$B-$s") $(wc -c < p.html)b :: $s"
+          done
+          curl -sL -A "$UA" "$B-256gb-night-sky-verizon" -o v.html
+          echo "::warning::carrier slugs: $(grep -oE '7\.6-inch-display-256gb-night-sky-[a-z-]+' v.html | sort -u | tr '\n' ' ')"
+          echo "::warning::upgrade mentions: $(grep -oiE '.{0,60}apple-upgrade.{0,60}' v.html | head -3 | tr '\n' ' ' | cut -c1-500)"
