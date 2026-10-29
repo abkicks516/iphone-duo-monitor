@@ -164,7 +164,9 @@ def log_history(appeared, gone, titles):
         git("add", HISTORY_FILE)
         git("commit", "-qm", f"Stock history: {len(appeared)} in, {len(gone)} out")
         for _ in range(3):
-            git("pull", "-q", "--rebase", "origin", "main")
+            if git("pull", "-q", "--rebase", "origin", "main").returncode != 0:
+                git("rebase", "--abort")  # never leave a half-finished rebase behind
+                continue
             if git("push", "-q", "origin", "HEAD:main").returncode == 0:
                 break
         else:

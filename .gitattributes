@@ -1,0 +1,2 @@
+# History files are append-only logs: merge by keeping both sides
+stock-history*.csv merge=union
