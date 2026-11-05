@@ -8,6 +8,7 @@ Python standard library so it runs anywhere without installing anything.
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -29,6 +30,9 @@ PRICE_RE = re.compile(r'"partNumber":"(M[A-Z0-9/]+)","price":\{"fullPrice":([\d.
 CHUNK = 10  # parts per fulfillment request
 TZ = ZoneInfo(os.environ.get("TIMEZONE", "America/New_York"))
 PRICES = {}  # part -> price, filled in from the buy page
+CARRIER = os.environ.get("CARRIER", "unlocked")  # unlocked, att, verizon or t-mobile
+BAG_URL = "https://www.apple.com/shop/bag"
+HISTORY_FILE = os.environ.get("HISTORY_FILE", "stock-history.csv")
 
 
 def env_list(name):
@@ -98,8 +102,13 @@ def matches_filters(title, include, exclude):
     return all(k.lower() in t for k in include) and not any(k.lower() in t for k in exclude)
 
 
-def product_url(part):
-    # Apple redirects this to the buy page with storage and color preselected.
+def product_url(part, title):
+    """Buy page with storage, color and carrier preselected."""
+    m = re.fullmatch(r"iPhone Duo (\d+[GT]B) (.+)", title)
+    if m:
+        storage, color = m.group(1).lower(), re.sub(r"\W+", "-", m.group(2).lower()).strip("-")
+        return f"{BUY_PAGE}/7.6-inch-display-{storage}-{color}-{CARRIER}"
+    # Unknown title format: Apple redirects this to the buy page with storage and color set.
     return f"https://www.apple.com/shop/product/{part}"
 
 
@@ -117,11 +126,11 @@ def alert_for(hit):
         f"Store hours today: {hit['hours']}" if hit["hours"] else "",
         f"Found {found}. Tap to buy - these sell out in minutes.",
     ]
-    url = product_url(hit["part"])
-    maps_q = urllib.parse.quote(f"Apple {hit['store']} {hit['street']} {hit['zip']}".strip())
-    actions = [f"view, Buy now, {url}", f"view, Directions, https://maps.apple.com/?q={maps_q}"]
+    url = product_url(hit["part"], hit["title"])
+    # ntfy allows at most 3 buttons. "Open bag" is for a phone already waiting in your bag.
+    actions = [f"view, Buy now, {url}", f"view, Open bag, {BAG_URL}"]
     if hit["phone"]:
-        actions.insert(1, f"view, Call store, tel:{re.sub(r'[^0-9+]', '', hit['phone'])}")
+        actions.append(f"view, Call store, tel:{re.sub(r'[^0-9+]', '', hit['phone'])}")
     return title, "\n".join(l for l in lines if l), url, "; ".join(actions)
 
 
@@ -137,6 +146,33 @@ def notify(topic, title, message, click, actions=None):
     urllib.request.urlopen(req, timeout=30).read()
 
 
+def log_history(appeared, gone, titles):
+    """Append in-stock/sold-out events to the CSV, then push it if running in Actions."""
+    now = datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
+    new_file = not os.path.exists(HISTORY_FILE)
+    with open(HISTORY_FILE, "a") as f:
+        if new_file:
+            f.write("time,event,model,store,part\n")
+        for event, keys in (("in stock", appeared), ("sold out", gone)):
+            for key in sorted(keys):
+                part, store = key.split("@", 1)
+                f.write(f"{now},{event},{titles.get(part, part)},{store},{part}\n")
+    if os.environ.get("GITHUB_ACTIONS"):
+        git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True)
+        git("config", "user.name", "stock-monitor")
+        git("config", "user.email", "stock-monitor@users.noreply.github.com")
+        git("add", HISTORY_FILE)
+        git("commit", "-qm", f"Stock history: {len(appeared)} in, {len(gone)} out")
+        for _ in range(3):
+            if git("pull", "-q", "--rebase", "origin", "main").returncode != 0:
+                git("rebase", "--abort")  # never leave a half-finished rebase behind
+                continue
+            if git("push", "-q", "origin", "HEAD:main").returncode == 0:
+                break
+        else:
+            print("WARNING: could not push stock history")
+
+
 def load_state():
     try:
         with open(STATE_FILE) as f:
@@ -150,16 +186,22 @@ def save_state(keys):
         json.dump(sorted(keys), f, indent=2)
 
 
-def check_once(parts, location, include, exclude, topic, previous, verbose):
-    hits, titles = [], {}
-    for i in range(0, len(parts), CHUNK):
-        h, t = check_chunk(parts[i : i + CHUNK], location)
-        hits += h
-        titles.update(t)
+def check_once(parts, locations, include, exclude, topic, previous, verbose, skip_stores=()):
+    hits, titles, seen = [], {}, set()
+    for location in locations:  # nearby ZIPs share stores, so skip repeats
+        for i in range(0, len(parts), CHUNK):
+            h, t = check_chunk(parts[i : i + CHUNK], location)
+            titles.update(t)
+            for hit in h:
+                if hit["store"].lower() in skip_stores:
+                    continue
+                if (hit["part"], hit["store"]) not in seen:
+                    seen.add((hit["part"], hit["store"]))
+                    hits.append(hit)
 
     watched = [p for p in parts if matches_filters(titles.get(p, p), include, exclude)]
     if verbose:
-        print(f"Watching {len(watched)} of {len(parts)} models near {location}:")
+        print(f"Watching {len(watched)} of {len(parts)} models near {', '.join(locations)}:")
         for p in watched:
             print(f"  {p}  {titles.get(p, '(no title returned)')}")
         if titles and not watched:
@@ -168,6 +210,11 @@ def check_once(parts, location, include, exclude, topic, previous, verbose):
     hits = [h for h in hits if h["part"] in watched]
     current = {f"{h['part']}@{h['store']}" for h in hits}
     new = [h for h in hits if f"{h['part']}@{h['store']}" not in previous]
+    if current != previous:
+        try:
+            log_history(current - previous, previous - current, titles)
+        except Exception as e:  # never let logging block an alert
+            print(f"WARNING: history logging failed: {e}")
 
     stamp = datetime.now(TZ).strftime("%H:%M:%S")
     if new:
@@ -181,10 +228,11 @@ def check_once(parts, location, include, exclude, topic, previous, verbose):
 
 
 def main():
-    location = os.environ.get("ZIP_CODE")
+    locations = env_list("ZIP_CODE")  # one or more, comma-separated
     topic = os.environ.get("NTFY_TOPIC")
-    if not location or not topic:
+    if not locations or not topic:
         sys.exit("ZIP_CODE and NTFY_TOPIC must be set")
+    skip_stores = {x.lower() for x in env_list("EXCLUDE_STORES")}  # e.g. "New Haven,Westfarms"
     include = env_list("INCLUDE_KEYWORDS")  # e.g. "256GB,Black" - all must match
     exclude = env_list("EXCLUDE_KEYWORDS")  # e.g. "AT&T,Verizon"
     # Keep checking for RUN_MINUTES (0 = check once), every INTERVAL_SECONDS.
@@ -196,7 +244,7 @@ def main():
     while True:
         checks += 1
         try:
-            state = check_once(parts, location, include, exclude, topic, state, first)
+            state = check_once(parts, locations, include, exclude, topic, state, first, skip_stores)
             save_state(state)
             first = False
         except Exception as e:  # one bad response shouldn't end a long run
