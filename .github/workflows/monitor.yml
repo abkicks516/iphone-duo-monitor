@@ -29,14 +29,15 @@ jobs:
             exclude: ""
             carrier: unlocked
             history: stock-history-dc-nova.csv
-          - name: nyc-nj
-            zip: "10001,08901,10475,07652,11256,11746" # 29 NYC, NJ and Long Island stores
-            topic: duo-watch-ny-qci1o0ym
-            exclude: ""
-            # Suffolk ZIPs also reach Connecticut and Rhode Island stores; skip those.
-            exclude_stores: Danbury Fair Mall,Evergreen Walk,Greenwich Avenue,New Haven,Providence Place,SoNo Collection,Westfarms
-            carrier: unlocked
-            history: stock-history-nyc-nj.csv
+          # NYC/NJ watcher paused (everyone there has a phone). Uncomment to turn it back on.
+          # - name: nyc-nj
+          #   zip: "10001,08901,10475,07652,11256,11746" # 29 NYC, NJ and Long Island stores
+          #   topic: duo-watch-ny-qci1o0ym
+          #   exclude: ""
+          #   # Suffolk ZIPs also reach Connecticut and Rhode Island stores; skip those.
+          #   exclude_stores: Danbury Fair Mall,Evergreen Walk,Greenwich Avenue,New Haven,Providence Place,SoNo Collection,Westfarms
+          #   carrier: unlocked
+          #   history: stock-history-nyc-nj.csv
     name: check (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v4
